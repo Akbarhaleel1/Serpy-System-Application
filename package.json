@@ -1,0 +1,9 @@
+{
+  "scripts": {
+    "desktop:dev": "cd client && pnpm run build && cd ../electron && npm run dev",
+    "desktop:dist": "cd client && pnpm run build && cd ../electron && npm run dist"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1"
+  }
+}

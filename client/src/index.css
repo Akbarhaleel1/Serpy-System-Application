@@ -1,0 +1,150 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    /* Clean Modern Theme - Based on Sample */
+    --background: 0 0% 98%;
+    --background-secondary: 0 0% 96%;
+    --foreground: 225 15% 20%;
+    --muted: 220 13% 91%;
+    --muted-foreground: 225 8% 50%;
+
+    /* Card Colors */
+    --card: 0 0% 100%;
+    --card-foreground: 225 15% 20%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 225 15% 20%;
+
+    /* Vibrant Colors from Sample */
+    --primary: 14 100% 65%;
+    /* Orange */
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 14 100% 75%;
+    /* Lighter Orange for hover */
+    --secondary: 180 45% 65%;
+    /* Teal */
+    --secondary-foreground: 0 0% 100%;
+    --accent: 270 95% 65%;
+    /* Purple */
+    --accent-foreground: 0 0% 100%;
+
+    /* Additional Colors */
+    --success: 142 76% 50%;
+    --success-foreground: 0 0% 100%;
+    --warning: 45 100% 60%;
+    --warning-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Borders */
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 14 100% 65%;
+
+    /* Status Colors */
+    --urgent: 0 84% 60%;
+    --urgent-foreground: 0 0% 100%;
+    --pending: 45 100% 60%;
+    --pending-foreground: 0 0% 100%;
+    --completed: 142 76% 50%;
+    --completed-foreground: 0 0% 100%;
+
+    /* Clean Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(14 100% 65%) 0%, hsl(14 100% 75%) 100%);
+    --gradient-secondary: linear-gradient(135deg, hsl(180 45% 65%) 0%, hsl(180 45% 75%) 100%);
+    --gradient-accent: linear-gradient(135deg, hsl(270 95% 65%) 0%, hsl(270 95% 75%) 100%);
+    --gradient-success: linear-gradient(135deg, hsl(142 76% 50%) 0%, hsl(142 76% 60%) 100%);
+    --gradient-warning: linear-gradient(135deg, hsl(45 100% 60%) 0%, hsl(45 100% 70%) 100%);
+    --gradient-orange: linear-gradient(135deg, hsl(14 100% 65%) 0%, hsl(14 100% 75%) 100%);
+
+    /* Hover Effects */
+    --hover-overlay: 14 100% 95%;
+    /* Very light orange */
+    --hover-glow: 0 4px 20px hsl(14 100% 65% / 0.3);
+
+    /* Modern Shadows */
+    --shadow-card: 0 2px 8px 0 hsl(225 15% 20% / 0.08);
+    --shadow-elevated: 0 4px 12px 0 hsl(225 15% 20% / 0.12);
+    --shadow-float: 0 8px 24px 0 hsl(225 15% 20% / 0.16);
+
+    --radius: 12px;
+
+    /* Sidebar */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 225 15% 20%;
+    --sidebar-primary: 14 100% 65%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 96%;
+    --sidebar-accent-foreground: 225 15% 20%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 14 100% 65%;
+  }
+
+  .dark {
+    --background: 215 28% 17%;
+    --foreground: 0 0% 98%;
+
+    --card: 215 20% 25%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 215 20% 25%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 212 100% 47%;
+    --primary-foreground: 0 0% 98%;
+
+    --secondary: 215 20% 25%;
+    --secondary-foreground: 220 14% 96%;
+
+    --muted: 215 20% 25%;
+    --muted-foreground: 215 16% 47%;
+
+    --accent: 212 100% 47%;
+    --accent-foreground: 0 0% 98%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 215 20% 25%;
+    --input: 215 20% 25%;
+    --ring: 212 100% 47%;
+
+    --sidebar-background: 215 28% 17%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 212 100% 47%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 215 20% 25%;
+    --sidebar-accent-foreground: 220 14% 96%;
+    --sidebar-border: 215 20% 25%;
+    --sidebar-ring: 212 100% 47%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+
+  /* Global hover effects */
+  .hover-orange {
+    @apply transition-all duration-200 ease-out hover:bg-[hsl(var(--hover-overlay))] hover:shadow-[var(--hover-glow)];
+  }
+
+  .hover-lift {
+    @apply transition-all duration-200 ease-out hover:scale-[1.02] hover:shadow-[var(--hover-glow)];
+  }
+
+  .hover-glow {
+    @apply transition-all duration-300 ease-out hover:shadow-[var(--hover-glow)];
+  }
+}

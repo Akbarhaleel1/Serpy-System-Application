@@ -1,0 +1,9 @@
+{
+  "amount": 249900,
+  "currency": "INR", 
+  "receipt": "order_STARTER_test",
+  "notes": {
+    "planName": "STARTER",
+    "userId": "current-user"
+  }
+}

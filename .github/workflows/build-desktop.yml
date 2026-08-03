@@ -1,0 +1,50 @@
+name: Build Desktop Installers
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'desktop-v*'
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install client dependencies
+        working-directory: client
+        run: pnpm install --frozen-lockfile
+
+      - name: Build client
+        working-directory: client
+        run: pnpm run build
+
+      - name: Install electron shell dependencies
+        working-directory: electron
+        run: npm ci
+
+      - name: Build installer
+        working-directory: electron
+        run: npm run dist
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: serpy-desktop-${{ matrix.os }}
+          path: |
+            electron/release/*.dmg
+            electron/release/*.exe
+          if-no-files-found: error

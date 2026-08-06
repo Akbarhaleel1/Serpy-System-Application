@@ -12,6 +12,9 @@ const path = require('path');
 
 const app = express();
 
+// Running inside the SerpY desktop shell rather than as a hosted server
+const EMBEDDED = process.env.SERPY_EMBEDDED === '1';
+
 // Security Middleware
 app.use(helmet());
 app.use(compression());
@@ -49,11 +52,16 @@ if (process.env.NODE_ENV === 'development') {
 // Serve static files from public/temp directory for temporary PDFs
 app.use('/temp', express.static(path.join(__dirname, '../public/temp')));
 
-// Serve static files from client build directory
-app.use('/assets', express.static(path.join(__dirname, '../../client/dist/assets')));
+// Serve static files from client build directory.
+// Skipped when embedded: the Electron shell serves the UI itself, and this
+// block's `app.get('*')` fallback is registered ahead of the API routes, so
+// leaving it on would swallow every /api request before it reaches them.
+if (!EMBEDDED) {
+  app.use('/assets', express.static(path.join(__dirname, '../../client/dist/assets')));
+}
 
 // Serve the frontend app in production
-if (process.env.NODE_ENV === 'production') {
+if (!EMBEDDED && process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '../../client/dist')));
   
   // Serve index.html for all non-API routes
@@ -68,16 +76,66 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
+// Send lifecycle updates to the Electron shell that spawned us (no-op otherwise)
+function notifyShell(message) {
+  if (typeof process.send === 'function') process.send(message);
+}
+
 // Database connection
 let mongoUri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/print_arts_flow';
 // Force IPv4 connection by replacing localhost with 127.0.0.1
 mongoUri = mongoUri.replace('localhost', '127.0.0.1');
-mongoose.connect(mongoUri)
-  .then(() => console.log('✅ MongoDB connected successfully'))
-  .catch(err => {
-    console.error('❌ MongoDB connection error:', err);
+
+let dbConnected = false;
+
+async function connectWithRetry(attempt = 0) {
+  try {
+    await mongoose.connect(mongoUri, { serverSelectionTimeoutMS: 15000 });
+    dbConnected = true;
+    console.log('✅ MongoDB connected successfully');
+    notifyShell({ type: 'db-connected' });
+    startScheduledJobs();
+  } catch (err) {
+    dbConnected = false;
+    console.error('❌ MongoDB connection error:', err.message);
+    notifyShell({ type: 'db-error', message: err.message });
+
+    // On a desktop machine a failed connection usually means the user is
+    // offline, not that the config is wrong. Keep retrying instead of exiting,
+    // so the app recovers on its own when the network comes back.
+    if (!EMBEDDED) process.exit(1);
+
+    const delay = Math.min(30000, 2000 * 2 ** attempt);
+    setTimeout(() => connectWithRetry(attempt + 1), delay);
+  }
+}
+
+connectWithRetry();
+
+// When embedded, the API listens on a loopback port that every other process
+// on the machine can reach. Require a per-launch secret that only the Electron
+// shell and the renderer it preloads know, so other local apps can't drive it.
+if (EMBEDDED) {
+  const localKey = process.env.SERPY_LOCAL_KEY;
+
+  if (!localKey) {
+    console.error('❌ SERPY_LOCAL_KEY missing - refusing to start unprotected');
     process.exit(1);
+  }
+
+  app.use('/api', (req, res, next) => {
+    if (req.path === '/health') return next();
+
+    const provided = req.get('x-serpy-local-key');
+    if (provided !== localKey) {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Unauthorized local request'
+      });
+    }
+    next();
   });
+}
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));
@@ -227,10 +285,19 @@ async function autoCheckPaymentReminders() {
   }
 }
 
-// Run auto-check every hour (3600000ms)
-setInterval(autoCheckPaymentReminders, 3600000);
-// Also run once after a short delay on startup
-setTimeout(autoCheckPaymentReminders, 30000);
+// Started only once the database is actually connected - these jobs query
+// Mongo directly and would throw on every tick while the app is offline.
+let scheduledJobsStarted = false;
+
+function startScheduledJobs() {
+  if (scheduledJobsStarted) return;
+  scheduledJobsStarted = true;
+
+  // Run auto-check every hour (3600000ms)
+  setInterval(autoCheckPaymentReminders, 3600000);
+  // Also run once after a short delay on startup
+  setTimeout(autoCheckPaymentReminders, 30000);
+}
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -238,7 +305,8 @@ app.get('/api/health', (req, res) => {
     status: 'success',
     message: 'SerpY ERP API is running',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.NODE_ENV || 'development',
+    database: dbConnected ? 'connected' : 'connecting'
   });
 });
 
@@ -293,11 +361,17 @@ app.use('/api/*', (req, res) => {
   });
 });
 
-const PORT = process.env.PORT || 4001;
+// Embedded: bind loopback only so the API is unreachable from the network, and
+// let the OS pick a free port so we never collide with whatever else the user
+// happens to be running. Hosted: keep the fixed public port.
+const PORT = EMBEDDED ? 0 : (process.env.PORT || 4001);
+const HOST = EMBEDDED ? '127.0.0.1' : '0.0.0.0';
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+const server = app.listen(PORT, HOST, () => {
+  const { port } = server.address();
+  console.log(`🚀 Server running on ${HOST}:${port}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+  notifyShell({ type: 'listening', port });
 });
 
 module.exports = app;

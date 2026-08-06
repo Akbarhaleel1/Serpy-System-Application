@@ -40,3 +40,7 @@ Thumbs.db
 # Electron desktop shell build output
 electron/app
 electron/release
+
+# All env files, including .env.production used for licence-service setup
+.env*
+.vercel

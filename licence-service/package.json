@@ -1,0 +1,12 @@
+{
+  "name": "serpy-licence-service",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Account creation, payment verification and licence activation for the SerpY desktop app",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "mongodb": "^6.10.0"
+  }
+}

@@ -1,5 +1,4 @@
 const express = require('express');
-const nodemailer = require('nodemailer');
 const { body } = require('express-validator');
 const { validationResult } = require('express-validator');
 const Quotation = require('../models/Quotation');
@@ -7,6 +6,8 @@ const Customer = require('../models/Customer');
 const Settings = require('../models/Settings');
 const PDFService = require('../services/PDFService');
 const { protect } = require('../middleware/auth');
+// Quotations go out from the sending business's own mailbox
+const { getMailer } = require('../services/MailerService');
 
 async function getCompanyInfo(userId) {
   const settings = await Settings.getOrCreateSettings(userId);
@@ -47,17 +48,6 @@ async function getCompanyInfo(userId) {
     upiId: settings.upiId || ''
   };
 }
-
-const createTransporter = () => nodemailer.createTransport({
-  host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-  port: process.env.EMAIL_PORT || 587,
-  secure: false,
-  tls: { rejectUnauthorized: false },
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS ? process.env.EMAIL_PASS.replace(/\s+/g, '') : ''
-  }
-});
 
 const router = express.Router();
 
@@ -232,7 +222,7 @@ router.post('/:id/send-email', protect, async (req, res) => {
       console.warn('⚠️ Quotation PDF generation for email failed:', pdfErr.message);
     }
 
-    const companyName = process.env.COMPANY_NAME || 'SerpY ERP';
+    const companyName = companyInfo.name || 'SerpY ERP';
     const validUntil = quotation.valid_until
       ? new Date(quotation.valid_until).toLocaleDateString('en-IN') : 'N/A';
 
@@ -301,9 +291,9 @@ router.post('/:id/send-email', protect, async (req, res) => {
 </div>
 </body></html>`;
 
-    const transporter = createTransporter();
+    const { transporter, from } = await getMailer(req.user);
     await transporter.sendMail({
-      from: process.env.EMAIL_FROM || `"${companyName}" <${process.env.EMAIL_USER}>`,
+      from,
       to: toEmail,
       subject: `Quotation ${quotation.quotationNumber} from ${companyName}`,
       html,

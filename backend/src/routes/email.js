@@ -1,25 +1,26 @@
 const express = require('express');
-const nodemailer = require('nodemailer');
 const { protect, authorize } = require('../middleware/auth');
+const { getMailer, EmailNotConfiguredError } = require('../services/MailerService');
 
 const router = express.Router();
 
-// Create email transporter (configure based on your email service)
-const createTransporter = () => {
-  // For development, use ethereal.email or configure your SMTP
-  return nodemailer.createTransport({
-    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-    port: process.env.EMAIL_PORT || 587,
-    secure: false, // true for 465, false for other ports
-    tls: {
-      rejectUnauthorized: false // Allow self-signed certificates in development
-    },
-    auth: {
-      user: process.env.EMAIL_USER || 'your-email@gmail.com',
-      pass: process.env.EMAIL_PASS ? process.env.EMAIL_PASS.replace(/\s+/g, '') : 'your-app-password'
-    }
+// Every business using the desktop app sends from its own mailbox, so the
+// transport is resolved per request from that user's saved SMTP settings
+// (see services/MailerService.js) rather than from shared environment vars.
+
+// Turns a missing/incomplete SMTP setup into a clear 400 instead of a 500
+function respondToMailError(res, error, fallbackMessage) {
+  if (error instanceof EmailNotConfiguredError) {
+    return res.status(400).json({ status: 'error', message: error.message });
+  }
+
+  console.error(`❌ ${fallbackMessage}:`, error);
+  return res.status(500).json({
+    status: 'error',
+    message: fallbackMessage,
+    error: process.env.NODE_ENV === 'development' ? error.message : 'Email service unavailable'
   });
-};
+}
 
 // Email templates
 const getEmailTemplate = (template, data) => {
@@ -109,8 +110,16 @@ const getEmailTemplate = (template, data) => {
 
 // @route   POST /api/email/send
 // @desc    Send email
-// @access  Private (or public for staff creation)
-router.post('/send', async (req, res) => {
+// @access  Private
+//
+// Previously the 'staff-welcome' template was exempt from authentication and
+// every other template only checked that an Authorization header existed
+// without validating it - which left the company's mailbox open to anyone who
+// could reach the API. Sending now always runs through `protect`, both to close
+// that hole and because the sender's own SMTP settings are looked up from
+// req.user. The protected /send-staff-credentials route below already covered
+// the staff-welcome case.
+router.post('/send', protect, async (req, res) => {
   try {
     const { to, subject, template, data } = req.body;
 
@@ -122,65 +131,16 @@ router.post('/send', async (req, res) => {
       });
     }
 
-    // For staff creation, allow without authentication
-    if (template === 'staff-welcome') {
-      // Create transporter
-      const transporter = createTransporter();
-
-      // Get email template
-      const emailContent = getEmailTemplate(template, data);
-
-      // Email options
-      const mailOptions = {
-        from: process.env.EMAIL_FROM || `"${process.env.COMPANY_NAME || 'SerpY ERP'}" <${process.env.EMAIL_USER}>`,
-        to: Array.isArray(to) ? to.join(', ') : to,
-        subject: subject,
-        html: emailContent.html,
-        text: emailContent.text
-      };
-
-      // Send email
-      const info = await transporter.sendMail(mailOptions);
-
-      console.log('✅ Staff welcome email sent successfully:', info.messageId);
-
-      res.status(200).json({
-        status: 'success',
-        message: 'Staff welcome email sent successfully',
-        data: {
-          messageId: info.messageId,
-          recipient: to
-        }
-      });
-      return;
-    }
-
-    // For other templates, require authentication
-    const token = req.headers.authorization?.split(' ')[1];
-    if (!token) {
-      return res.status(401).json({
-        status: 'error',
-        message: 'Access denied. No token provided.'
-      });
-    }
-
-    // Create transporter
-    const transporter = createTransporter();
-
-    // Get email template
+    const { transporter, from } = await getMailer(req.user);
     const emailContent = getEmailTemplate(template, data);
 
-    // Email options
-    const mailOptions = {
-      from: process.env.EMAIL_FROM || `"${process.env.COMPANY_NAME || 'SerpY ERP'}" <${process.env.EMAIL_USER}>`,
+    const info = await transporter.sendMail({
+      from,
       to: Array.isArray(to) ? to.join(', ') : to,
-      subject: subject,
+      subject,
       html: emailContent.html,
       text: emailContent.text
-    };
-
-    // Send email
-    const info = await transporter.sendMail(mailOptions);
+    });
 
     console.log('✅ Email sent successfully:', info.messageId);
 
@@ -194,13 +154,7 @@ router.post('/send', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Email sending error:', error);
-    
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to send email',
-      error: process.env.NODE_ENV === 'development' ? error.message : 'Email service unavailable'
-    });
+    respondToMailError(res, error, 'Failed to send email');
   }
 });
 
@@ -219,31 +173,26 @@ router.post('/send-staff-credentials', protect, authorize('admin', 'manager'), a
       });
     }
 
-    // Create transporter
-    const transporter = createTransporter();
+    const { transporter, from, settings } = await getMailer(req.user);
 
-    // Get email template
     const emailContent = getEmailTemplate('staff-welcome', {
       fullName,
       email,
       password,
       role,
       loginUrl: loginUrl || 'https://app.serpy.in',
-      companyName: process.env.COMPANY_NAME || 'Synx Automation Private Limited',
-      supportEmail: process.env.EMAIL_USER || 'support@serpy.in'
+      // The staff member is joining the customer's business, not ours
+      companyName: settings?.companyName || 'your organisation',
+      supportEmail: settings?.companyEmail || ''
     });
 
-    // Email options
-    const mailOptions = {
-      from: process.env.EMAIL_FROM || `"${process.env.COMPANY_NAME || 'SerpY ERP'}" <${process.env.EMAIL_USER}>`,
+    const info = await transporter.sendMail({
+      from,
       to: Array.isArray(to) ? to.join(', ') : to,
       subject: 'Welcome to SerpY ERP - Your Login Credentials',
       html: emailContent.html,
       text: emailContent.text
-    };
-
-    // Send email
-    const info = await transporter.sendMail(mailOptions);
+    });
 
     console.log('✅ Staff credentials email sent successfully:', info.messageId);
 
@@ -257,80 +206,16 @@ router.post('/send-staff-credentials', protect, authorize('admin', 'manager'), a
     });
 
   } catch (error) {
-    console.error('❌ Staff credentials email error:', error);
-    
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to send staff credentials email',
-      error: process.env.NODE_ENV === 'development' ? error.message : 'Email service unavailable'
-    });
+    respondToMailError(res, error, 'Failed to send staff credentials email');
   }
 });
 
 // @route   POST /api/email/test-public
 // @desc    Test email configuration without auth (for development)
-// @access  Public
-router.post('/test-public', async (req, res) => {
-  try {
-    const { to } = req.body;
-
-    if (!to) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Test email recipient is required'
-      });
-    }
-
-    // Create transporter
-    const transporter = createTransporter();
-
-    // Verify transporter configuration
-    await transporter.verify();
-
-    // Send test email
-    const mailOptions = {
-      from: process.env.EMAIL_FROM || `"${process.env.COMPANY_NAME || 'SerpY ERP'}" <${process.env.EMAIL_USER}>`,
-      to: to,
-      subject: 'SerpY ERP - Email Configuration Test',
-      html: `
-        <h2>Email Configuration Test</h2>
-        <p>This is a test email to verify that the email configuration is working correctly.</p>
-        <p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
-        <p><strong>System:</strong> SerpY ERP</p>
-      `,
-      text: `
-        Email Configuration Test
-        
-        This is a test email to verify that the email configuration is working correctly.
-        
-        Time: ${new Date().toLocaleString()}
-        System: SerpY ERP
-      `
-    };
-
-    const info = await transporter.sendMail(mailOptions);
-
-    console.log('✅ Test email sent successfully:', info.messageId);
-
-    res.status(200).json({
-      status: 'success',
-      message: 'Test email sent successfully',
-      data: {
-        messageId: info.messageId,
-        recipient: to
-      }
-    });
-
-  } catch (error) {
-    console.error('❌ Test email error:', error);
-    
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to send test email',
-      error: process.env.NODE_ENV === 'development' ? error.message : 'Email service unavailable'
-    });
-  }
-});
+// The old public /test-public route was removed: it sent mail through the
+// configured mailbox with no authentication at all, which any host on the
+// network (or any local process, in the desktop build) could abuse. Use the
+// authenticated /test below instead.
 
 // @route   POST /api/email/test
 // @desc    Test email configuration
@@ -346,34 +231,32 @@ router.post('/test', protect, authorize('admin'), async (req, res) => {
       });
     }
 
-    // Create transporter
-    const transporter = createTransporter();
+    const { transporter, from, settings } = await getMailer(req.user);
 
-    // Verify transporter configuration
+    // Surfaces bad credentials as a clear failure before anything is sent
     await transporter.verify();
 
-    // Send test email
-    const mailOptions = {
-      from: process.env.EMAIL_FROM || `"${process.env.COMPANY_NAME || 'SerpY ERP'}" <${process.env.EMAIL_USER}>`,
-      to: to,
+    const companyName = settings?.companyName || 'SerpY ERP';
+
+    const info = await transporter.sendMail({
+      from,
+      to,
       subject: 'SerpY ERP - Email Configuration Test',
       html: `
         <h2>Email Configuration Test</h2>
         <p>This is a test email to verify that the email configuration is working correctly.</p>
         <p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
-        <p><strong>System:</strong> SerpY ERP</p>
+        <p><strong>Business:</strong> ${companyName}</p>
       `,
-      text: `
-        Email Configuration Test
-        
-        This is a test email to verify that the email configuration is working correctly.
-        
-        Time: ${new Date().toLocaleString()}
-        System: SerpY ERP
-      `
-    };
-
-    const info = await transporter.sendMail(mailOptions);
+      text: [
+        'Email Configuration Test',
+        '',
+        'This is a test email to verify that the email configuration is working correctly.',
+        '',
+        `Time: ${new Date().toLocaleString()}`,
+        `Business: ${companyName}`
+      ].join('\n')
+    });
 
     console.log('✅ Test email sent successfully:', info.messageId);
 
@@ -387,13 +270,7 @@ router.post('/test', protect, authorize('admin'), async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Test email error:', error);
-    
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to send test email',
-      error: process.env.NODE_ENV === 'development' ? error.message : 'Email service unavailable'
-    });
+    respondToMailError(res, error, 'Failed to send test email');
   }
 });
 

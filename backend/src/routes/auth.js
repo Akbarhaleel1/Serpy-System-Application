@@ -9,6 +9,9 @@ const nodemailer = require('nodemailer');
 
 const router = express.Router();
 
+// Running inside the SerpY desktop shell rather than as a hosted server
+const EMBEDDED = process.env.SERPY_EMBEDDED === '1';
+
 // Validation rules
 const registerValidation = [
   body('email').isEmail().normalizeEmail().withMessage('Please provide a valid email'),
@@ -100,6 +103,25 @@ router.post('/send-otp', sendOTPValidation, async (req, res) => {
       expiresAt: new Date(Date.now() + 10 * 60 * 1000) // 10 minutes
     });
 
+    // In the desktop app the very first account is created before any SMTP
+    // details exist - they are entered in Settings, which needs a login. Mailing
+    // the code is therefore impossible on first run, so hand it straight back to
+    // the app instead. The code's job is to prove the person owns this email,
+    // and buying the licence already established that; the local API is
+    // loopback-only and key-guarded, so nobody else can read the response.
+    if (EMBEDDED && !process.env.EMAIL_USER) {
+      console.log('ℹ️  Embedded first-run: returning OTP locally instead of emailing');
+      return res.status(200).json({
+        status: 'success',
+        message: 'Enter the verification code shown to continue.',
+        data: {
+          email,
+          expiresIn: 10, // minutes
+          localOtp: otp
+        }
+      });
+    }
+
     // Send OTP via email
     const transporter = createTransporter();
 
@@ -129,12 +151,11 @@ router.post('/send-otp', sendOTPValidation, async (req, res) => {
   } catch (error) {
     console.error('❌ Send OTP error:', error.message);
     console.error('Full error:', error);
-    console.error('Error stack:', error.stack);
     res.status(500).json({
       status: 'error',
       message: 'Failed to send OTP',
-      error: error.message,
-      details: error.stack
+      // Stack traces are for the log, not the response
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });

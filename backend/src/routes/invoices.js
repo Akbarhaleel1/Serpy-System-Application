@@ -950,7 +950,7 @@ router.post('/:id/send-email', protect, [
     // Send email with custom message
     console.log('📧 Preparing to send invoice email...');
     const invoiceName = `Invoice_${invoice.invoiceNumber}`;
-    await PDFService.sendInvoiceEmail(pdfBuffer, email, invoiceName, message);
+    await PDFService.sendInvoiceEmail(pdfBuffer, email, invoiceName, message, req.user);
 
     res.status(200).json({
       status: 'success',

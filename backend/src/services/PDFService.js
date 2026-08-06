@@ -1,6 +1,5 @@
 const PDFDocument = require('pdfkit');
-const nodemailer = require('nodemailer');
-const puppeteer = require('puppeteer');
+const HtmlToPdf = require('./HtmlToPdfService');
 
 class PDFService {
   static async generateInvoicePDFFromHTML(invoice, companyInfo) {
@@ -10,44 +9,13 @@ class PDFService {
       // Generate HTML template
       const htmlContent = this.generateInvoiceHTML(invoice, companyInfo);
 
-      // Use Puppeteer to convert HTML to PDF
-      let browser;
       try {
-        console.log('📦 Launching Puppeteer browser...');
-        browser = await puppeteer.launch({
-          headless: 'new',
-          args: ['--no-sandbox', '--disable-setuid-sandbox']
-        });
-
-        const page = await browser.newPage();
-        await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
-
-        const pdfBuffer = await page.pdf({
-          format: 'A4',
-          margin: {
-            top: '20mm',
-            right: '20mm',
-            bottom: '20mm',
-            left: '20mm'
-          },
-          printBackground: true
-        });
-
-        await browser.close();
-
+        const pdfBuffer = await HtmlToPdf.render(htmlContent, { marginMm: 20 });
         console.log('✅ PDF generated from HTML, size:', pdfBuffer.length, 'bytes');
         return pdfBuffer;
-      } catch (puppeteerError) {
-        console.warn('⚠️ Puppeteer error, falling back to PDFKit:', puppeteerError.message);
-        if (browser) {
-          try {
-            await browser.close();
-          } catch (e) {
-            console.warn('Error closing browser:', e.message);
-          }
-        }
-        // Fallback to PDFKit if Puppeteer fails (e.g., Chrome not installed)
-        console.log('🔄 Falling back to PDFKit generation...');
+      } catch (renderError) {
+        // Fallback to PDFKit if the HTML renderer is unavailable
+        console.warn('⚠️ HTML render failed, falling back to PDFKit:', renderError.message);
         return await this.generateInvoicePDF(invoice, companyInfo);
       }
     } catch (error) {
@@ -62,32 +30,9 @@ class PDFService {
 
       const htmlContent = this.generatePurchaseBillHTML(bill, companyInfo);
 
-      let browser;
-      try {
-        browser = await puppeteer.launch({
-          headless: 'new',
-          args: ['--no-sandbox', '--disable-setuid-sandbox']
-        });
-
-        const page = await browser.newPage();
-        await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
-
-        const pdfBuffer = await page.pdf({
-          format: 'A4',
-          margin: { top: '20mm', right: '20mm', bottom: '20mm', left: '20mm' },
-          printBackground: true
-        });
-
-        await browser.close();
-        console.log('✅ Purchase bill PDF generated, size:', pdfBuffer.length, 'bytes');
-        return pdfBuffer;
-      } catch (puppeteerError) {
-        console.warn('⚠️ Puppeteer error for purchase bill:', puppeteerError.message);
-        if (browser) {
-          try { await browser.close(); } catch (e) { console.warn('Error closing browser:', e.message); }
-        }
-        throw puppeteerError;
-      }
+      const pdfBuffer = await HtmlToPdf.render(htmlContent, { marginMm: 20 });
+      console.log('✅ Purchase bill PDF generated, size:', pdfBuffer.length, 'bytes');
+      return pdfBuffer;
     } catch (error) {
       console.error('❌ Purchase bill PDF generation error:', error.message);
       throw new Error('Failed to generate PDF: ' + error.message);
@@ -650,18 +595,10 @@ class PDFService {
 
   static async generateQuotationPDFFromHTML(quotation, companyInfo) {
     const htmlContent = this.generateQuotationHTML(quotation, companyInfo);
-    let browser;
     try {
-      browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
-      const page = await browser.newPage();
-      await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
-      const pdfBuffer = await page.pdf({ format: 'A4', margin: { top: '10mm', right: '10mm', bottom: '10mm', left: '10mm' }, printBackground: true });
-      await browser.close();
-      return pdfBuffer;
+      return await HtmlToPdf.render(htmlContent, { marginMm: 10 });
     } catch (err) {
-      console.warn('⚠️ Puppeteer error for quotation, falling back to PDFKit:', err.message);
-      if (browser) { try { await browser.close(); } catch (e) {} }
-      // Fallback to PDFKit if Puppeteer/Chrome is unavailable
+      console.warn('⚠️ HTML render failed for quotation, falling back to PDFKit:', err.message);
       return await this.generateQuotationPDF(quotation, companyInfo);
     }
   }
@@ -1711,25 +1648,13 @@ class PDFService {
     return words;
   }
 
-  static async sendInvoiceEmail(invoiceBuffer, recipientEmail, invoiceName, customMessage = null) {
+  // `sender` is the authenticated user (req.user) whose business is invoicing.
+  // Their own SMTP settings decide which mailbox this goes out from, so the
+  // customer receives the invoice from the business they actually deal with.
+  static async sendInvoiceEmail(invoiceBuffer, recipientEmail, invoiceName, customMessage = null, sender = null) {
     try {
-      // Validate email credentials
-      if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-        throw new Error('Email credentials not configured. Please set EMAIL_USER and EMAIL_PASS in .env file');
-      }
-
-      const transporter = nodemailer.createTransport({
-        host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-        port: parseInt(process.env.EMAIL_PORT) || 587,
-        secure: false,
-        auth: {
-          user: process.env.EMAIL_USER,
-          pass: process.env.EMAIL_PASS
-        },
-        tls: {
-          rejectUnauthorized: false
-        }
-      });
+      const { getMailer } = require('./MailerService');
+      const { transporter, from } = await getMailer(sender);
 
       // Use custom message if provided, otherwise use default
       const emailBody = customMessage
@@ -1737,7 +1662,7 @@ class PDFService {
         : '<p>Please find the attached invoice.</p>';
 
       await transporter.sendMail({
-        from: process.env.EMAIL_USER,
+        from,
         to: recipientEmail,
         subject: `Invoice: ${invoiceName}`,
         html: emailBody,

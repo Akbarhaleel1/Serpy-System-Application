@@ -1,5 +1,59 @@
 export const BASE_URL = import.meta.env.VITE_API_URL || 'https://serpy.synxautomate.com/api';
 
+// The desktop build runs its own backend on a loopback port chosen at launch,
+// so the address is not known until the shell tells us. It also issues a
+// per-launch key that the local API requires, which stops other processes on
+// the machine from driving it.
+export interface DesktopStatus {
+  activated: boolean;
+  email: string | null;
+  apiBaseUrl: string | null;
+  localKey: string | null;
+  dbConnected: boolean;
+  lastError: string | null;
+  licenceApi: string;
+  machineId: string;
+  version: string;
+}
+
+declare global {
+  interface Window {
+    serpy?: {
+      isDesktop: true;
+      getStatus: () => Promise<DesktopStatus>;
+      activate: (licenceKey: string) => Promise<{
+        ok: boolean;
+        message?: string;
+        apiBaseUrl?: string;
+        localKey?: string;
+      }>;
+      deactivate: () => Promise<{ ok: boolean }>;
+      onBackendStatus: (cb: (status: Partial<DesktopStatus>) => void) => () => void;
+    };
+  }
+}
+
+export const isDesktop = (): boolean => Boolean(window.serpy?.isDesktop);
+
+let desktopTarget: { baseUrl: string; localKey: string } | null = null;
+
+/** Cached so we ask the shell once, not on every request. */
+async function getDesktopTarget() {
+  if (desktopTarget) return desktopTarget;
+  if (!window.serpy) return null;
+
+  const status = await window.serpy.getStatus();
+  if (!status.apiBaseUrl || !status.localKey) return null;
+
+  desktopTarget = { baseUrl: status.apiBaseUrl, localKey: status.localKey };
+  return desktopTarget;
+}
+
+/** Called after activation, when the local API has just come up. */
+export function setDesktopTarget(baseUrl: string, localKey: string) {
+  desktopTarget = { baseUrl, localKey };
+}
+
 interface ApiResponse<T = any> {
   status: 'success' | 'error';
   message?: string;
@@ -20,30 +74,30 @@ class ApiClient {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
-    const url = `${this.baseURL}${endpoint}`;
-    
+    // On the desktop, requests go to the locally spawned backend instead of the
+    // hosted API, and must carry the shell's per-launch key.
+    const desktop = await getDesktopTarget();
+    const url = `${desktop ? desktop.baseUrl : this.baseURL}${endpoint}`;
+
     // Always get the latest token from localStorage
     const currentToken = localStorage.getItem('token');
-    
+
     console.log('🌐 API Request:', endpoint);
-    console.log('🌐 Token available:', currentToken ? 'YES' : 'NO');
-    console.log('🌐 Token preview:', currentToken ? currentToken.substring(0, 20) + '...' : 'NONE');
-    
+
     // Create AbortController for timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
-    
+
     const config: RequestInit = {
       headers: {
         'Content-Type': 'application/json',
         ...(currentToken && { Authorization: `Bearer ${currentToken}` }),
+        ...(desktop && { 'x-serpy-local-key': desktop.localKey }),
         ...options.headers,
       },
       signal: controller.signal,
       ...options,
     };
-    
-    console.log('🌐 Request headers:', config.headers);
 
     try {
       const response = await fetch(url, config);
@@ -85,7 +139,7 @@ class ApiClient {
     
     // The backend returns token at root level, not in response.token
     if (response && typeof response === 'object' && 'token' in response) {
-      console.log('🔑 Token found in response:', response.token);
+      console.log('🔑 Token received');
       this.setToken(response.token);
       return {
         user: (response as any).data?.user || (response as any).user,
@@ -107,7 +161,7 @@ class ApiClient {
     
     // The backend returns token at root level, not in response.token
     if (response && typeof response === 'object' && 'token' in response) {
-      console.log('🔑 Token found in response:', response.token);
+      console.log('🔑 Token received');
       this.setToken(response.token);
       return {
         user: (response as any).data?.user || (response as any).user,

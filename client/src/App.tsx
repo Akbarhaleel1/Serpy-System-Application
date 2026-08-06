@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Layout } from "@/components/layout/Layout";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { DesktopGate } from "@/components/desktop/DesktopGate";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { PermissionRoute } from "@/components/auth/PermissionRoute";
 import Index from "./pages/Index";
@@ -56,6 +57,9 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
+        {/* Desktop builds must be licensed and have their local server up
+            before any of this can load. No-op on the web. */}
+        <DesktopGate>
         <AuthProvider>
           <Routes>
             <Route path="/auth" element={<Auth />} />
@@ -112,6 +116,7 @@ const App = () => (
             />
           </Routes>
         </AuthProvider>
+        </DesktopGate>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

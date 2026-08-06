@@ -7,6 +7,8 @@ export const BASE_URL = import.meta.env.VITE_API_URL || 'https://serpy.synxautom
 export interface DesktopStatus {
   activated: boolean;
   email: string | null;
+  licenceKey: string | null;
+  activatedAt: string | null;
   apiBaseUrl: string | null;
   localKey: string | null;
   dbConnected: boolean;
@@ -52,6 +54,27 @@ async function getDesktopTarget() {
 /** Called after activation, when the local API has just come up. */
 export function setDesktopTarget(baseUrl: string, localKey: string) {
   desktopTarget = { baseUrl, localKey };
+}
+
+/**
+ * fetch() aimed at the right API for this build: the shell's loopback backend
+ * on the desktop, the hosted one otherwise.
+ *
+ * Call sites that want the raw Response should use this rather than
+ * fetch(`${BASE_URL}/...`). Going straight to BASE_URL skips the desktop
+ * target, so on the desktop the request leaves the machine entirely - and
+ * arrives without the per-launch key the local API requires.
+ */
+export async function apiFetch(endpoint: string, options: RequestInit = {}) {
+  const desktop = await getDesktopTarget();
+
+  return fetch(`${desktop ? desktop.baseUrl : BASE_URL}${endpoint}`, {
+    ...options,
+    headers: {
+      ...options.headers,
+      ...(desktop && { 'x-serpy-local-key': desktop.localKey }),
+    },
+  });
 }
 
 interface ApiResponse<T = any> {

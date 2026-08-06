@@ -8,7 +8,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Building2, Eye, EyeOff, Shield, Users, BarChart3 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { OTPVerification } from "@/components/auth/OTPVerification";
-import { BASE_URL } from "@/lib/apiClient";
+import { apiFetch, isDesktop } from "@/lib/apiClient";
+import { LicencePanel } from "@/components/desktop/LicencePanel";
 
 export default function Auth() {
   const { user, signIn, signUp, loading } = useAuth();
@@ -40,7 +41,7 @@ export default function Auth() {
     setIsLoading(true);
     
     try {
-      const response = await fetch(`${BASE_URL}/auth/send-otp`, {
+      const response = await apiFetch(`/auth/send-otp`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -263,6 +264,18 @@ export default function Auth() {
                   </TabsContent>
 
                   <TabsContent value="signup" className="space-y-4 md:space-y-5">
+                    {/* On desktop a new user needs a licence, not an account -
+                        the account is created for them when the licence
+                        activates and provisions their database. */}
+                    {isDesktop() ? (
+                      <div className="space-y-4">
+                        <p className="text-sm text-gray-600">
+                          SerpY is licensed per computer. Buy a licence to get started,
+                          or activate one you already have.
+                        </p>
+                        <LicencePanel onActivated={() => window.location.reload()} />
+                      </div>
+                    ) : (
                     <form onSubmit={handleSignUp} className="space-y-4 md:space-y-5">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
@@ -380,6 +393,7 @@ export default function Auth() {
                           : "Create Account"}
                       </Button>
                     </form>
+                    )}
                   </TabsContent>
                 </Tabs>
               </CardContent>

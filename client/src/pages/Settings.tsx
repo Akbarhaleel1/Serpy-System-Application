@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { Save, Building, Bell, Globe, Database, RefreshCw, Upload, X, QrCode, Landmark, CreditCard } from "lucide-react";
+import { Save, Building, Bell, Globe, Database, RefreshCw, Upload, X, QrCode, Landmark, CreditCard, KeyRound, Copy, Check } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import apiClient from "@/lib/apiClient";
+import apiClient, { isDesktop, type DesktopStatus } from "@/lib/apiClient";
 import { useToast } from "@/hooks/use-toast";
 
 const Settings = () => {
@@ -27,11 +27,35 @@ const Settings = () => {
   const [qrCodePreview, setQrCodePreview] = useState<string>("");
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string>("");
+  const [desktop, setDesktop] = useState<DesktopStatus | null>(null);
+  const [copiedLicence, setCopiedLicence] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     fetchSettings();
   }, []);
+
+  // Licence details live in the desktop shell, not the API
+  useEffect(() => {
+    if (!window.serpy) return;
+    window.serpy.getStatus().then(setDesktop).catch(() => setDesktop(null));
+  }, []);
+
+  const copyLicenceKey = async () => {
+    if (!desktop?.licenceKey) return;
+
+    try {
+      await navigator.clipboard.writeText(desktop.licenceKey);
+      setCopiedLicence(true);
+      setTimeout(() => setCopiedLicence(false), 2000);
+    } catch {
+      toast({
+        title: "Could not copy",
+        description: "Select the licence key and copy it manually.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const fetchSettings = async () => {
     try {
@@ -213,7 +237,7 @@ const Settings = () => {
       </div>
 
       <Tabs defaultValue="company" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className={`grid w-full ${isDesktop() ? "grid-cols-3" : "grid-cols-2"}`}>
           <TabsTrigger value="company">
             <Building className="h-4 w-4 mr-2" />
             Company
@@ -222,6 +246,12 @@ const Settings = () => {
             <Bell className="h-4 w-4 mr-2" />
             Notifications
           </TabsTrigger>
+          {isDesktop() && (
+            <TabsTrigger value="licence">
+              <KeyRound className="h-4 w-4 mr-2" />
+              Licence
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {/* Company Settings Tab */}
@@ -606,6 +636,80 @@ const Settings = () => {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Licence Tab - desktop only, sourced from the shell rather than the API */}
+        {isDesktop() && (
+          <TabsContent value="licence" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Licence</CardTitle>
+                <CardDescription>
+                  Your licence details for this computer. Keep the licence key safe - you
+                  need it to activate SerpY on another machine.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="licenceKey">Licence Key</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="licenceKey"
+                      readOnly
+                      value={desktop?.licenceKey || "Not activated"}
+                      className="font-mono"
+                      onFocus={(e) => e.currentTarget.select()}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={copyLicenceKey}
+                      disabled={!desktop?.licenceKey}
+                      title="Copy licence key"
+                    >
+                      {copiedLicence ? (
+                        <Check className="h-4 w-4" />
+                      ) : (
+                        <Copy className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+
+                <Separator />
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Registered Email</Label>
+                    <p className="text-sm text-muted-foreground">
+                      {desktop?.email || "-"}
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Activated On</Label>
+                    <p className="text-sm text-muted-foreground">
+                      {desktop?.activatedAt
+                        ? new Date(desktop.activatedAt).toLocaleDateString()
+                        : "-"}
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>App Version</Label>
+                    <p className="text-sm text-muted-foreground">
+                      {desktop?.version || "-"}
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Database</Label>
+                    <p className="text-sm text-muted-foreground">
+                      {desktop?.dbConnected ? "Connected" : "Not connected"}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

@@ -31,7 +31,10 @@ app.use(cors({
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  // x-serpy-local-key is the per-launch secret the embedded API requires (see
+  // the EMBEDDED guard below). Without it here the preflight strips the header
+  // and every desktop request fails CORS.
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-serpy-local-key']
 }));
 
 

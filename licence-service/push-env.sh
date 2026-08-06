@@ -22,10 +22,28 @@ if [ ! -f "$ENV_FILE" ]; then
 fi
 
 # Refuse to upload the template's dummy values - they would deploy a service
-# that looks configured but fails on the first real request.
-if grep -qE '=(rzp_test_xxxxxxxxxxxxx|xxxxxxxx)$' "$ENV_FILE"; then
-  echo "$ENV_FILE still contains placeholder values (xxxxxxxx)."
-  echo "Fill in every value before running this."
+# that looks configured but fails on the first real request. Report which
+# variable names still need real values (never the values themselves - that
+# would print secrets to the terminal).
+unfilled=()
+while IFS= read -r line || [ -n "$line" ]; do
+  [[ -z "${line// }" || "$line" =~ ^[[:space:]]*# ]] && continue
+
+  name="${line%%=*}"
+  value="${line#*=}"
+  [[ -z "$name" ]] && continue
+
+  # Template placeholders are runs of x's, or the literal USER:PASSWORD stand-in
+  if [[ "$value" =~ [xX]{3,} || "$value" == *"USER:PASSWORD"* ]]; then
+    unfilled+=("$name")
+  fi
+done < "$ENV_FILE"
+
+if [ "${#unfilled[@]}" -gt 0 ]; then
+  echo "These still have placeholder values in $ENV_FILE:"
+  printf '  - %s\n' "${unfilled[@]}"
+  echo
+  echo "Open the file, replace those with your real values, then run this again."
   exit 1
 fi
 

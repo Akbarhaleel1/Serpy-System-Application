@@ -24,8 +24,15 @@ async function licences() {
   const client = await getClient();
   const collection = client.db('serpy_licences').collection('licences');
 
-  // Cheap and idempotent; Mongo skips it once the index exists
-  await collection.createIndex({ licenceKeyHash: 1 }, { unique: true });
+  // Cheap and idempotent; Mongo skips it once the index exists.
+  //
+  // sparse: true matters here. A record only gets licenceKeyHash once payment
+  // is verified - at signup it has none. A plain unique index treats every
+  // document missing the field as equal to null, so only the first signup ever
+  // would succeed and all later ones would collide on that shared "null" slot.
+  // sparse excludes fieldless documents from the index entirely, so uniqueness
+  // is enforced only once a real hash exists.
+  await collection.createIndex({ licenceKeyHash: 1 }, { unique: true, sparse: true });
   await collection.createIndex({ email: 1 });
   await collection.createIndex({ razorpayOrderId: 1 });
 

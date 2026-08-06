@@ -1,4 +1,4 @@
-import { BASE_URL } from './apiClient';
+import { apiFetch } from './apiClient';
 
 interface RazorpayOptions {
   key: string;
@@ -82,7 +82,7 @@ export const createRazorpayOrder = async (planData: {
   userId?: string;
 }): Promise<{ orderId: string; amount: number; keyId?: string }> => {
   try {
-    const response = await fetch(`${BASE_URL}/razorpay/create-order`, {
+    const response = await apiFetch(`/razorpay/create-order`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -125,7 +125,7 @@ export const verifyPayment = async (paymentData: {
 }): Promise<{ success: boolean; subscription?: any }> => {
   try {
     const token = localStorage.getItem('token');
-    const response = await fetch(`${BASE_URL}/razorpay/verify-payment`, {
+    const response = await apiFetch(`/razorpay/verify-payment`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

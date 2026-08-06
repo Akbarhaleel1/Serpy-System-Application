@@ -13,7 +13,7 @@ const loadURL = serve({ directory: 'app' });
 // Where account creation, payment verification and activation happen.
 // Everything else runs locally on the customer's machine.
 const LICENCE_API =
-  process.env.SERPY_LICENCE_API || 'https://serpy-licence-service.vercel.app/api';
+  process.env.SERPY_LICENCE_API || 'https://licence-service.vercel.app/api';
 
 let mainWindow;
 
@@ -92,6 +92,11 @@ ipcMain.handle('serpy:get-status', () => {
   return {
     activated: Boolean(licence?.mongoUri),
     email: licence?.email ?? null,
+    // The customer's own licence number, so Settings can show it back to them
+    // when they need it for support or to move to another machine. The scoped
+    // mongoUri in the same record stays here - the renderer never needs it.
+    licenceKey: licence?.licenceKey ?? null,
+    activatedAt: licence?.activatedAt ?? null,
     apiBaseUrl: status.port ? `http://127.0.0.1:${status.port}/api` : null,
     localKey: status.localKey,
     dbConnected: status.dbConnected,

@@ -271,6 +271,27 @@ router.post('/verify-otp', verifyOTPValidation, async (req, res) => {
 // @route   POST /api/auth/register
 // @desc    Register a new user (legacy - for backward compatibility)
 // @access  Public
+// @route   GET /api/auth/needs-setup
+// @desc    Whether this database still has no users, i.e. a freshly activated
+//          desktop install that needs its owner account created
+// @access  Public (on the desktop the local key already gates every route)
+router.get('/needs-setup', async (req, res) => {
+  try {
+    const users = await User.countDocuments();
+
+    res.status(200).json({
+      status: 'success',
+      data: { needsSetup: users === 0 },
+    });
+  } catch (error) {
+    console.error('needs-setup error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Server error checking setup state'
+    });
+  }
+});
+
 router.post('/register', registerValidation, async (req, res) => {
   try {
     const { email, password, fullName, phone, companyName } = req.body;

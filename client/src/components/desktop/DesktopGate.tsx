@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { isDesktop, type DesktopStatus } from '@/lib/apiClient';
+import { apiFetch, isDesktop, type DesktopStatus } from '@/lib/apiClient';
 import { LicencePanel } from './LicencePanel';
 import { SupportRenewalModal } from './SupportRenewalModal';
+import { FirstRunSetup } from './FirstRunSetup';
 
 /**
  * Stands in front of the whole app on desktop builds.
@@ -14,6 +15,8 @@ import { SupportRenewalModal } from './SupportRenewalModal';
 export function DesktopGate({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<DesktopStatus | null>(null);
   const [checking, setChecking] = useState(true);
+  // null while unknown - the answer only exists once the database is reachable
+  const [needsSetup, setNeedsSetup] = useState<boolean | null>(null);
 
   const refresh = useCallback(async () => {
     if (!window.serpy) {
@@ -35,6 +38,30 @@ export function DesktopGate({ children }: { children: React.ReactNode }) {
       setStatus((prev) => (prev ? { ...prev, ...update } : prev));
     });
   }, []);
+
+  // A licence provisions an empty database, so the owner account has to be
+  // created before there is anyone to sign in as. Only answerable once the
+  // backend is actually connected.
+  useEffect(() => {
+    if (!status?.apiBaseUrl || !status.dbConnected) return;
+
+    let cancelled = false;
+
+    apiFetch('/auth/needs-setup')
+      .then((response) => response.json())
+      .then((body) => {
+        if (!cancelled) setNeedsSetup(Boolean(body?.data?.needsSetup));
+      })
+      .catch(() => {
+        // Treat an unreachable check as "already set up" rather than trapping
+        // an existing customer behind a setup screen they do not need
+        if (!cancelled) setNeedsSetup(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [status?.apiBaseUrl, status?.dbConnected]);
 
   // Web build, or the preload bridge is unavailable - behave exactly as before
   if (!isDesktop()) return <>{children}</>;
@@ -65,6 +92,16 @@ export function DesktopGate({ children }: { children: React.ReactNode }) {
               : 'One moment.'}
           </p>
         </FullScreen>
+      );
+    }
+
+    if (needsSetup === null) {
+      return <FullScreen>Preparing your workspace…</FullScreen>;
+    }
+
+    if (needsSetup) {
+      return (
+        <FirstRunSetup email={status.email} onComplete={() => setNeedsSetup(false)} />
       );
     }
 

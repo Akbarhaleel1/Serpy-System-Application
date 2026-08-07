@@ -15,6 +15,8 @@ export default function Auth() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showOTPVerification, setShowOTPVerification] = useState(false);
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -77,6 +79,19 @@ export default function Auth() {
 
   const handleBackToSignup = () => {
     setShowOTPVerification(false);
+  };
+
+  // For the one legitimate case "Sign Up" on desktop has to answer: this
+  // computer already holds a business's data, but it isn't the visitor's
+  // business - a wrong licence key, a repurposed machine, or a demo unit. There
+  // is no way to have two businesses on one install at once, so the honest
+  // answer is to let go of this one first; it drops back to the pre-activation
+  // welcome screen where buying or activating a licence is offered again.
+  const handleDisconnectLicence = async () => {
+    if (!window.serpy) return;
+    setDisconnecting(true);
+    await window.serpy.deactivate();
+    window.location.reload();
   };
 
   // Show OTP verification component if needed
@@ -268,15 +283,63 @@ export default function Auth() {
                         owner account was made at setup, and every other login
                         is created from inside the app. */}
                     {isDesktop() ? (
-                      <div className="space-y-3 rounded-2xl border-2 border-orange-100 bg-orange-50/40 p-5">
-                        <p className="text-sm font-semibold text-gray-900">
-                          SerpY is already set up on this computer
-                        </p>
-                        <p className="text-sm text-gray-600">
-                          Sign in with your email and password. If you do not have a
-                          login yet, ask your administrator to create one for you under
-                          User Management.
-                        </p>
+                      <div className="space-y-4">
+                        <div className="space-y-3 rounded-2xl border-2 border-orange-100 bg-orange-50/40 p-5">
+                          <p className="text-sm font-semibold text-gray-900">
+                            SerpY is already set up on this computer
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            Sign in with your email and password. If you do not have a
+                            login yet, ask your administrator to create one for you under
+                            User Management.
+                          </p>
+                        </div>
+
+                        {confirmDisconnect ? (
+                          <div className="space-y-3 rounded-2xl border-2 border-red-100 bg-red-50/40 p-5">
+                            <p className="text-sm font-semibold text-gray-900">
+                              Disconnect this business from this computer?
+                            </p>
+                            <p className="text-sm text-gray-600">
+                              This computer will forget the business currently set up here
+                              and return to the setup screen, where you can activate or buy
+                              your own licence. This does not delete that business's data —
+                              it stays exactly as it is, reachable again with its own
+                              licence key.
+                            </p>
+                            <div className="flex gap-2">
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                size="sm"
+                                disabled={disconnecting}
+                                onClick={handleDisconnectLicence}
+                              >
+                                {disconnecting ? "Disconnecting…" : "Disconnect"}
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                disabled={disconnecting}
+                                onClick={() => setConfirmDisconnect(false)}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-center text-sm text-gray-500">
+                            Setting SerpY up for a different business?{" "}
+                            <button
+                              type="button"
+                              className="font-medium text-orange-600 hover:underline"
+                              onClick={() => setConfirmDisconnect(true)}
+                            >
+                              Disconnect this licence
+                            </button>
+                          </p>
+                        )}
                       </div>
                     ) : (
                     <form onSubmit={handleSignUp} className="space-y-4 md:space-y-5">

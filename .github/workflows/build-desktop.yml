@@ -13,6 +13,10 @@ jobs:
       matrix:
         os: [macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    # electron-builder uploads the installers to the GitHub release that
+    # electron-updater later reads as its update feed
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -38,6 +42,11 @@ jobs:
 
       - name: Build installer
         working-directory: electron
+        # electron-builder detects CI and tries to publish. Without a token it
+        # fails after the installer is already built, so the token is required
+        # even on runs that end up publishing nothing.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run dist
 
       - name: Upload installer artifact

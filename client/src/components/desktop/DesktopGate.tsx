@@ -121,8 +121,8 @@ export function DesktopGate({ children }: { children: React.ReactNode }) {
         <CardHeader>
           <CardTitle>Welcome to SerpY</CardTitle>
           <CardDescription>
-            Buy a licence to set up SerpY on this computer, or activate one you
-            already have.
+            Set up SerpY on this computer. Already have an account? Connect to
+            it and sign in.
           </CardDescription>
         </CardHeader>
 

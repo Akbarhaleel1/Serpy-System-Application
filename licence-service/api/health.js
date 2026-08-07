@@ -37,6 +37,14 @@ module.exports = async (req, res) => {
     missing,
     razorpayMode,
     maxMachinesPerLicence: Number(process.env.LICENCE_MAX_MACHINES || 3),
+    // Not in REQUIRED: the service still sells and activates licences without
+    // it. What breaks is customers recovering a lost key on their own.
+    canMailLostKeys: Boolean(
+      process.env.LICENCE_SMTP_HOST && process.env.LICENCE_SMTP_USER
+    ),
+    // Without it, signing in still works but rotates the customer's licence key
+    // every time, which breaks the key their other machines hold
+    sealsLicenceKeys: Boolean(process.env.LICENCE_KEY_SECRET),
     // Confirms the prices are what you think they are before real money moves
     priceRupees: process.env.LICENCE_PRICE_PAISE
       ? Number(process.env.LICENCE_PRICE_PAISE) / 100

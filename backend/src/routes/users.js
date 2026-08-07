@@ -1,6 +1,7 @@
 const express = require('express');
 const { body, query } = require('express-validator');
 const User = require('../models/User');
+const Employee = require('../models/Employee');
 const ActivityLog = require('../models/ActivityLog');
 const { protect, authorize } = require('../middleware/auth');
 const bcrypt = require('bcryptjs');
@@ -145,6 +146,55 @@ router.get('/:id', protect, async (req, res) => {
   }
 });
 
+/**
+ * Mirror a newly created login into the Employees list.
+ *
+ * The two records answer different questions - a User is "can this person sign
+ * in", an Employee is "who works here, on what salary" - but a login created
+ * for a colleague implies both. Employee.linkedUserId is what ties them
+ * together, so later edits in Employees stay attached to the right account.
+ *
+ * Scoping copies the admin's, matching how POST /api/hr/employees does it, so
+ * the record lands in the same tenant the admin is looking at.
+ */
+async function createLinkedEmployee({ user, admin }) {
+  const scope = admin.dataScope ? { dataScope: admin.dataScope } : { userId: admin._id };
+
+  // An admin may have added the person to Employees before giving them a
+  // login. Adopt that record rather than creating a duplicate of them.
+  const existing = await Employee.findOne({
+    ...scope,
+    $or: [{ linkedUserId: user._id }, ...(user.email ? [{ email: user.email }] : [])],
+  });
+
+  if (existing) {
+    if (!existing.linkedUserId) {
+      existing.linkedUserId = user._id;
+      await existing.save();
+    }
+    return existing;
+  }
+
+  const employee = new Employee({
+    name: user.fullName,
+    email: user.email,
+    phone: user.phone,
+    // A starting point the admin can correct in Employees; the role is the
+    // only thing we actually know about the job at this point.
+    designation: user.role,
+    dateOfJoining: new Date(),
+    status: user.isActive === false ? 'inactive' : 'active',
+    linkedUserId: user._id,
+    createdBy: admin._id,
+    userId: admin._id,
+  });
+
+  if (admin.dataScope) employee.dataScope = admin.dataScope;
+
+  await employee.save();
+  return employee;
+}
+
 // @route   POST /api/users
 // @desc    Create new user (admin/manager)
 // @access  Private
@@ -202,6 +252,16 @@ router.post('/', protect, authorize('admin', 'manager'), userValidation, async (
 
     // Create user - password will be hashed by pre-save hook
     const user = await User.create(userData);
+
+    // Give the new login an HR record too, so the person shows up in Employees
+    // instead of existing only as a set of credentials. Best-effort: the login
+    // is what was asked for, and failing the whole request would leave an
+    // account the admin cannot see but also cannot recreate.
+    try {
+      await createLinkedEmployee({ user, admin: req.user });
+    } catch (err) {
+      console.error('Could not create employee record for new user:', err.message);
+    }
 
     // Log activity
     await ActivityLog.logActivity({

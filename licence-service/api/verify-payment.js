@@ -11,6 +11,7 @@ const { licences } = require('../lib/store');
 const atlas = require('../lib/atlas');
 const { generateLicenceKey, hashLicenceKey, generateDbPassword } = require('../lib/keys');
 const { addYear } = require('../lib/support');
+const box = require('../lib/crypto-box');
 
 function signatureIsValid({ orderId, paymentId, signature, secret }) {
   const expected = crypto
@@ -89,6 +90,10 @@ module.exports = handler(async (req, res) => {
       $set: {
         status: 'active',
         licenceKeyHash: hashLicenceKey(licenceKey),
+        // Second, reversible copy, so signing in can hand back this same key
+        // rather than rotating it. Optional on purpose: an unset secret must
+        // not be able to fail a purchase that has already been paid for.
+        ...(box.isConfigured() ? { licenceKeySealed: box.seal(licenceKey) } : {}),
         razorpayPaymentId: paymentId,
         databaseName,
         dbUsername,

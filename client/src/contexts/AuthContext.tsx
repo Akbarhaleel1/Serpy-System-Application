@@ -47,6 +47,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Check subscription status and show modal if needed
   const checkSubscriptionStatus = (userData: User) => {
+    // Only the admin holds the licence and pays for it. Staff, managers and
+    // every other role are created under that subscription and carry none of
+    // their own, so testing them against it would put the whole team behind a
+    // payment screen they have no way to act on.
+    if (userData.role !== 'admin') {
+      setShowSubscriptionModal(false);
+      return;
+    }
+
     // Show modal if subscription is not active or doesn't exist
     if (!userData.subscription || !userData.subscription.isActive) {
       setShowSubscriptionModal(true);

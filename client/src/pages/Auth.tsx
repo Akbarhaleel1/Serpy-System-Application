@@ -9,7 +9,6 @@ import { Building2, Eye, EyeOff, Shield, Users, BarChart3 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { OTPVerification } from "@/components/auth/OTPVerification";
 import { apiFetch, isDesktop } from "@/lib/apiClient";
-import { LicencePanel } from "@/components/desktop/LicencePanel";
 
 export default function Auth() {
   const { user, signIn, signUp, loading } = useAuth();
@@ -264,16 +263,20 @@ export default function Auth() {
                   </TabsContent>
 
                   <TabsContent value="signup" className="space-y-4 md:space-y-5">
-                    {/* On desktop a new user needs a licence, not an account -
-                        the account is created for them when the licence
-                        activates and provisions their database. */}
+                    {/* This page is only reachable on desktop once a licence is
+                        active, so there is nothing here to sign up for: the
+                        owner account was made at setup, and every other login
+                        is created from inside the app. */}
                     {isDesktop() ? (
-                      <div className="space-y-4">
-                        <p className="text-sm text-gray-600">
-                          SerpY is licensed per computer. Buy a licence to get started,
-                          or activate one you already have.
+                      <div className="space-y-3 rounded-2xl border-2 border-orange-100 bg-orange-50/40 p-5">
+                        <p className="text-sm font-semibold text-gray-900">
+                          SerpY is already set up on this computer
                         </p>
-                        <LicencePanel onActivated={() => window.location.reload()} />
+                        <p className="text-sm text-gray-600">
+                          Sign in with your email and password. If you do not have a
+                          login yet, ask your administrator to create one for you under
+                          User Management.
+                        </p>
                       </div>
                     ) : (
                     <form onSubmit={handleSignUp} className="space-y-4 md:space-y-5">

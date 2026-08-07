@@ -36,6 +36,16 @@ jobs:
         working-directory: client
         run: pnpm run build
 
+      # Bundled into the installer via extraResources, so its dependencies have
+      # to exist here or the packaged server cannot start. Chromium is skipped:
+      # printing goes through the Electron shell, and the extraResources filter
+      # drops Puppeteer from the build anyway.
+      - name: Install backend dependencies
+        working-directory: backend
+        env:
+          PUPPETEER_SKIP_DOWNLOAD: 'true'
+        run: npm ci --omit=dev
+
       - name: Install electron shell dependencies
         working-directory: electron
         run: npm ci

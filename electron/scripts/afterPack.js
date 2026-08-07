@@ -38,14 +38,36 @@ function walk(dir, found = []) {
   return found;
 }
 
+// Where extraResources land, which is not the same shape on every platform:
+// macOS buries them in the .app bundle, Windows and Linux keep them beside the
+// executable.
+function resourcesDir(context) {
+  if (context.electronPlatformName === 'darwin') {
+    const appName = context.packager.appInfo.productFilename;
+    return path.join(context.appOutDir, `${appName}.app`, 'Contents', 'Resources');
+  }
+
+  return path.join(context.appOutDir, 'resources');
+}
+
 module.exports = async function afterPack(context) {
-  const resources = path.join(context.appOutDir, 'resources');
+  const resources = resourcesDir(context);
   const backend = path.join(resources, 'backend');
 
   if (!fs.existsSync(backend)) {
     throw new Error(
       `afterPack: no backend/ inside ${resources} - the app cannot run without it. ` +
         'Check the extraResources config in package.json.'
+    );
+  }
+
+  // A backend without its dependencies packages perfectly happily and then
+  // dies with MODULE_NOT_FOUND on the customer's machine, so treat a missing
+  // install as a build failure rather than a runtime surprise.
+  if (!fs.existsSync(path.join(backend, 'node_modules', 'express'))) {
+    throw new Error(
+      'afterPack: backend/node_modules is missing or incomplete - the packaged ' +
+        'server would fail to start. Run `npm ci --omit=dev` in backend/ before building.'
     );
   }
 

@@ -10,6 +10,7 @@ const { handler } = require('../lib/http');
 const { licences } = require('../lib/store');
 const atlas = require('../lib/atlas');
 const { generateLicenceKey, hashLicenceKey, generateDbPassword } = require('../lib/keys');
+const { addYear } = require('../lib/support');
 
 function signatureIsValid({ orderId, paymentId, signature, secret }) {
   const expected = crypto
@@ -77,6 +78,11 @@ module.exports = handler(async (req, res) => {
 
   const licenceKey = generateLicenceKey();
 
+  // The purchase covers the first year of cloud sync, backups, updates and
+  // support. After this date the app starts asking them to renew.
+  const paidAt = new Date();
+  const supportExpiresAt = addYear(paidAt);
+
   await collection.updateOne(
     { _id: record._id },
     {
@@ -87,7 +93,8 @@ module.exports = handler(async (req, res) => {
         databaseName,
         dbUsername,
         dbPassword, // needed to re-issue the connection string on each activation
-        paidAt: new Date(),
+        paidAt,
+        supportExpiresAt,
         activations: [],
         updatedAt: new Date(),
       },

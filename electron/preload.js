@@ -19,6 +19,10 @@ contextBridge.exposeInMainWorld('serpy', {
   /** Exchange a paid licence key for scoped DB credentials and start the API. */
   activate: (licenceKey) => ipcRenderer.invoke('serpy:activate', { licenceKey }),
 
+  /** Save the new support expiry after a renewal has been paid and verified. */
+  recordRenewal: (supportExpiresAt) =>
+    ipcRenderer.invoke('serpy:record-renewal', { supportExpiresAt }),
+
   /** Forget the licence on this machine (e.g. moving to another computer). */
   deactivate: () => ipcRenderer.invoke('serpy:deactivate'),
 

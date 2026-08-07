@@ -10,6 +10,7 @@ const REQUIRED = [
   'RAZORPAY_KEY_ID',
   'RAZORPAY_KEY_SECRET',
   'LICENCE_PRICE_PAISE',
+  'SUPPORT_PRICE_PAISE',
   'ATLAS_PUBLIC_KEY',
   'ATLAS_PRIVATE_KEY',
   'ATLAS_PROJECT_ID',
@@ -36,9 +37,12 @@ module.exports = async (req, res) => {
     missing,
     razorpayMode,
     maxMachinesPerLicence: Number(process.env.LICENCE_MAX_MACHINES || 3),
-    // Confirms the price is what you think it is before real money moves
+    // Confirms the prices are what you think they are before real money moves
     priceRupees: process.env.LICENCE_PRICE_PAISE
       ? Number(process.env.LICENCE_PRICE_PAISE) / 100
+      : null,
+    supportPriceRupees: process.env.SUPPORT_PRICE_PAISE
+      ? Number(process.env.SUPPORT_PRICE_PAISE) / 100
       : null,
   });
 };

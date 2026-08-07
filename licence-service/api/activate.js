@@ -81,6 +81,8 @@ module.exports = handler(async (req, res) => {
   res.status(200).json({
     customerId: record._id.toString(),
     email: record.email,
+    // Lets the app know when to start asking about the yearly support renewal
+    supportExpiresAt: record.supportExpiresAt ?? null,
     mongoUri: atlas.connectionString({
       username: record.dbUsername,
       password: record.dbPassword,

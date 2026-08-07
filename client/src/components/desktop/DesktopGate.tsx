@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { isDesktop, type DesktopStatus } from '@/lib/apiClient';
 import { LicencePanel } from './LicencePanel';
+import { SupportRenewalModal } from './SupportRenewalModal';
 
 /**
  * Stands in front of the whole app on desktop builds.
@@ -67,7 +68,14 @@ export function DesktopGate({ children }: { children: React.ReactNode }) {
       );
     }
 
-    return <>{children}</>;
+    // Mounted alongside the app rather than in front of it: a lapsed support
+    // period is a prompt, not a lock-out.
+    return (
+      <>
+        <SupportRenewalModal />
+        {children}
+      </>
+    );
   }
 
   return (

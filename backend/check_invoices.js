@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const Invoice = require('./src/models/Invoice');
 require('dotenv').config();
 
-mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://akbarhaleel508_db_user:jSKlK58fiRldYS6w@cluster0.6je5xm0.mongodb.net/?appName=Cluster0')
+mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://serpy_system_application:serpy_system_application@cluster0.6je5xm0.mongodb.net/?appName=Cluster0')
 .then(async () => {
   try {
     const invoices = await Invoice.find({

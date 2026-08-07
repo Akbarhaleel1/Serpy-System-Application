@@ -4,66 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { setDesktopTarget } from '@/lib/apiClient';
-
-const RAZORPAY_SCRIPT = 'https://checkout.razorpay.com/v1/checkout.js';
-
-declare global {
-  interface Window {
-    Razorpay?: new (options: Record<string, unknown>) => { open: () => void };
-  }
-}
-
-function loadRazorpay(): Promise<boolean> {
-  if (window.Razorpay) return Promise.resolve(true);
-
-  return new Promise((resolve) => {
-    const script = document.createElement('script');
-    script.src = RAZORPAY_SCRIPT;
-    script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
-    document.body.appendChild(script);
-  });
-}
-
-/**
- * POST JSON and fail with a message that says what actually went wrong.
- *
- * Worth the extra handling: a licence endpoint that isn't deployed yet returns
- * the host's HTML error page, and blindly calling .json() on that throws a
- * parse error that looks identical to being offline.
- */
-async function postJson(url: string, body: unknown) {
-  let response: Response;
-
-  try {
-    response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-  } catch {
-    throw new Error(`Cannot reach the licence server at ${url}. Check your internet connection.`);
-  }
-
-  const raw = await response.text();
-  let data: any;
-
-  try {
-    data = JSON.parse(raw);
-  } catch {
-    throw new Error(
-      response.status === 404
-        ? `No licence service is deployed at ${url}. Deploy licence-service and set SERPY_LICENCE_API.`
-        : `The licence server returned an unexpected response (HTTP ${response.status}).`
-    );
-  }
-
-  if (!response.ok) {
-    throw new Error(data.message || `Licence server error (HTTP ${response.status})`);
-  }
-
-  return data;
-}
+import { loadRazorpay, postJson } from '@/lib/licence';
 
 type Mode = 'buy' | 'redeem';
 
@@ -146,7 +87,7 @@ export function LicencePanel({ onActivated }: { onActivated?: () => void }) {
         amount: order.amount,
         currency: order.currency,
         name: 'SerpY',
-        description: 'SerpY ERP — one-time licence',
+        description: 'SerpY Desktop — one-time licence',
         prefill: { name: fullName, email },
         modal: {
           // Payment window closed without completing
@@ -204,6 +145,28 @@ export function LicencePanel({ onActivated }: { onActivated?: () => void }) {
 
       {mode === 'buy' ? (
         <form className="space-y-4" onSubmit={handlePurchase}>
+          {/* The one and only place the full price is put to someone: at the
+              point of buying. Afterwards the app only ever mentions the yearly
+              support figure. */}
+          <div className="rounded-xl border bg-muted/40 p-4">
+            <div className="flex items-baseline justify-between">
+              <span className="font-semibold">SerpY Desktop</span>
+              <span className="text-lg font-semibold">₹25,999</span>
+            </div>
+            <p className="text-xs text-muted-foreground">one-time, per user</p>
+
+            <ul className="mt-3 space-y-1 text-sm text-muted-foreground">
+              <li>• Windows and Mac application</li>
+              <li>• Onboarding and training support</li>
+              <li>• Cloud sync, backups and updates — first year included</li>
+            </ul>
+
+            <p className="mt-3 text-xs text-muted-foreground">
+              After the first year, cloud sync, backups, updates and support
+              continue at ₹5,999/year.
+            </p>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="licence-fullName">Your name</Label>
             <Input

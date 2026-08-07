@@ -9,6 +9,7 @@ export interface DesktopStatus {
   email: string | null;
   licenceKey: string | null;
   activatedAt: string | null;
+  supportExpiresAt: string | null;
   apiBaseUrl: string | null;
   localKey: string | null;
   dbConnected: boolean;
@@ -29,6 +30,9 @@ declare global {
         apiBaseUrl?: string;
         localKey?: string;
       }>;
+      recordRenewal: (
+        supportExpiresAt: string
+      ) => Promise<{ ok: boolean; message?: string }>;
       deactivate: () => Promise<{ ok: boolean }>;
       onBackendStatus: (cb: (status: Partial<DesktopStatus>) => void) => () => void;
     };

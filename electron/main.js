@@ -97,6 +97,9 @@ ipcMain.handle('serpy:get-status', () => {
     // mongoUri in the same record stays here - the renderer never needs it.
     licenceKey: licence?.licenceKey ?? null,
     activatedAt: licence?.activatedAt ?? null,
+    // When cloud sync, backups, updates and support run out. The first year
+    // comes with the licence; after that the app asks them to renew.
+    supportExpiresAt: licence?.supportExpiresAt ?? null,
     apiBaseUrl: status.port ? `http://127.0.0.1:${status.port}/api` : null,
     localKey: status.localKey,
     dbConnected: status.dbConnected,
@@ -134,6 +137,7 @@ ipcMain.handle('serpy:activate', async (_event, { licenceKey }) => {
     mongoUri: payload.mongoUri,
     email: payload.email,
     customerId: payload.customerId,
+    supportExpiresAt: payload.supportExpiresAt ?? null,
     activatedAt: new Date().toISOString(),
   };
 
@@ -151,6 +155,17 @@ ipcMain.handle('serpy:activate', async (_event, { licenceKey }) => {
     apiBaseUrl: `http://127.0.0.1:${status.port}/api`,
     localKey: status.localKey,
   };
+});
+
+// Called after the renderer has paid for another year and the licence service
+// has verified it. Persisting the new date here is what stops the renewal
+// prompt coming back on the next launch.
+ipcMain.handle('serpy:record-renewal', (_event, { supportExpiresAt }) => {
+  const licence = licenceStore.load();
+  if (!licence) return { ok: false, message: 'No licence on this machine' };
+
+  licenceStore.save({ ...licence, supportExpiresAt });
+  return { ok: true };
 });
 
 ipcMain.handle('serpy:deactivate', () => {

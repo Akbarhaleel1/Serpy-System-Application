@@ -30,6 +30,7 @@
       "backend-runner.js",
       "license-store.js",
       "updater.js",
+      "pdf-renderer.js",
       "app/**/*"
     ],
     "extraResources": [

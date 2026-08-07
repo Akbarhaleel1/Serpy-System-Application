@@ -50,7 +50,49 @@ function resourcesDir(context) {
   return path.join(context.appOutDir, 'resources');
 }
 
+/**
+ * Every local module a shipped file requires must itself be shipped.
+ *
+ * The files whitelist is a list of names, so forgetting one is silent: the app
+ * packages perfectly and then dies with MODULE_NOT_FOUND the first time a
+ * customer launches it. Cheaper to catch here than in a screenshot.
+ */
+function checkLocalRequires() {
+  const root = path.join(__dirname, '..');
+  const listed = new Set(
+    require(path.join(root, 'package.json')).build.files.filter(
+      (entry) => typeof entry === 'string' && entry.endsWith('.js')
+    )
+  );
+
+  const missing = [];
+
+  for (const file of listed) {
+    let source;
+    try {
+      source = fs.readFileSync(path.join(root, file), 'utf8');
+    } catch {
+      continue;
+    }
+
+    for (const [, target] of source.matchAll(/require\(['"]\.\/([^'"]+)['"]\)/g)) {
+      const asFile = target.endsWith('.js') ? target : `${target}.js`;
+      if (!listed.has(asFile)) missing.push(`  - ${file} requires './${target}'`);
+    }
+  }
+
+  if (missing.length) {
+    throw new Error(
+      `afterPack: these local modules are required but not in the files whitelist:\n${missing.join(
+        '\n'
+      )}\n\nAdd them to "build.files" in electron/package.json.`
+    );
+  }
+}
+
 module.exports = async function afterPack(context) {
+  checkLocalRequires();
+
   const resources = resourcesDir(context);
   const backend = path.join(resources, 'backend');
 
